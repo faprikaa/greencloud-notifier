@@ -74,7 +74,8 @@ Tidak membutuhkan volume. Container non-root, filesystem read-only, log dirotasi
 
 ## Perilaku pengecekan
 
-- Cek langsung saat startup, kemudian tunggu default **60 detik setelah satu siklus selesai**. Waktu HTTP menambah jarak antarcek; bukan jadwal tepat setiap menit.
+- Saat startup/restart, kirim **pesan tes Telegram** terlebih dahulu untuk memastikan bot dapat mengirim ke chat ID tujuan. Pesan tes bukan notifikasi stok. Pemantauan hanya dimulai setelah Telegram mengonfirmasi pengiriman berhasil. Kalau gagal, periksa token, chat ID, apakah chat bot sudah di-Start, izin grup, dan koneksi; aplikasi mencoba lagi dengan backoff tanpa memulai pengecekan stok.
+- Setelah tes Telegram berhasil, cek stok lalu tunggu default **60 detik setelah satu siklus selesai**. Waktu HTTP menambah jarak antarcek; bukan jadwal tepat setiap menit.
 - Interval minimum 30 detik. HTTP timeout connect/read 5/20 detik, respons maksimum 2 MiB.
 - `available`: formulir konfigurasi WHMCS dengan identitas produk yang cocok dan tombol lanjut aktif → kirim Telegram.
 - `unavailable`: penanda **Out of Stock** pada area order → tidak kirim.
@@ -86,7 +87,7 @@ Tidak membutuhkan volume. Container non-root, filesystem read-only, log dirotasi
 
 ## Batas verifikasi
 
-**Hasil verifikasi lingkungan pengembangan:** 19 tes offline lolos dan konfigurasi Compose valid. Build image belum terverifikasi karena Docker daemon tidak aktif. Request live dengan Python requests mendapat HTTP 403 untuk keempat produk; aplikasi mengembalikannya sebagai `unknown`. Karena itu pemantauan live belum terbukti bekerja dari lingkungan ini. Jalankan di host tujuan dan periksa log; bila 403 berlanjut, minta jalur akses/API yang diizinkan GreenCloud, jangan menganggap layanan sedang memantau stok dengan sukses.
+**Hasil verifikasi lingkungan pengembangan:** 23 tes offline lolos dan konfigurasi Compose valid. Build image belum terverifikasi karena Docker daemon tidak aktif. Request live dengan Python requests mendapat HTTP 403 untuk keempat produk; aplikasi mengembalikannya sebagai `unknown`. Karena itu pemantauan live belum terbukti bekerja dari lingkungan ini. Jalankan di host tujuan dan periksa log; bila 403 berlanjut, minta jalur akses/API yang diizinkan GreenCloud, jangan menganggap layanan sedang memantau stok dengan sukses.
 
 Keempat halaman produk saat inspeksi awal melalui curl menampilkan **Out of Stock**. Deteksi negatif berdasarkan HTML asli. Fixture positif mengikuti struktur standar WHMCS, tetapi **belum diverifikasi terhadap produk target yang benar-benar tersedia**. Jika tema/form berubah, hasil sengaja menjadi `unknown` daripada memberi notif palsu. Tidak ada jaminan stok masih ada saat link dibuka. Pengiriman Telegram langsung memerlukan token dan chat ID milikmu.
 

@@ -8,7 +8,7 @@ import requests
 from notifier.config import Config, PRODUCTS
 from notifier.stock import classify
 from notifier.network import Result, fetch_stock, send_message, retry_seconds, MAX_BYTES
-from notifier.__main__ import sweep, run
+from notifier.__main__ import sweep, run, verify_telegram
 
 SLUG = PRODUCTS[0].slug
 POSITIVE = '''<div id="order-standard_cart"><div class="product-info"><h2>BudgetKVMSGDC1-2</h2></div>
@@ -182,11 +182,49 @@ class MonitorTests(unittest.TestCase):
         sweep(self.cfg, Mock(), Mock(), stop)
         fetch.assert_not_called()
 
+    @patch('notifier.__main__.verify_telegram', return_value=True)
     @patch('notifier.__main__.sweep', return_value=(True, 0, 0))
-    def test_loop_backoff_and_shutdown(self, check):
+    def test_loop_backoff_and_shutdown(self, check, verify):
         self.stop.is_set.side_effect = [False, True]
         run(self.cfg, self.stop)
         self.stop.wait.assert_called_once_with(120)
+
+
+class StartupTests(unittest.TestCase):
+    def setUp(self):
+        self.config = Config('SECRET', '123', 60)
+        self.stop = Mock()
+        self.stop.is_set.return_value = False
+        self.stop.wait.return_value = False
+
+    @patch('notifier.__main__.send_message', return_value=Result('sent'))
+    def test_startup_message(self, send):
+        self.assertTrue(verify_telegram(self.config, Mock(), self.stop))
+        send.assert_called_once()
+        self.assertIn('bukan pemberitahuan stok', send.call_args.args[3])
+        self.assertIn('5 produk', send.call_args.args[3])
+
+    @patch('notifier.__main__.send_message')
+    def test_retry_until_success(self, send):
+        send.side_effect = [Result('failed', 300, True, 'HTTP 429'), Result('sent')]
+        with self.assertLogs('notifier', level='INFO') as logs:
+            self.assertTrue(verify_telegram(self.config, Mock(), self.stop))
+        self.assertEqual(send.call_count, 2)
+        self.assertEqual(self.stop.wait.call_args_list[0].args, (300,))
+        self.assertNotIn('SECRET', '\n'.join(logs.output))
+
+    @patch('notifier.__main__.send_message', return_value=Result('failed'))
+    def test_shutdown_during_retry(self, send):
+        self.stop.wait.return_value = True
+        with self.assertLogs('notifier', level='ERROR'):
+            self.assertFalse(verify_telegram(self.config, Mock(), self.stop))
+        send.assert_called_once()
+
+    @patch('notifier.__main__.sweep')
+    @patch('notifier.__main__.verify_telegram', return_value=False)
+    def test_no_polling_before_validation(self, verify, check):
+        run(self.config, self.stop)
+        check.assert_not_called()
 
 
 if __name__ == '__main__':
